@@ -25,6 +25,7 @@ const float plagueProbability = 0.15f;
 const int citizenWheatConsumption = 20;
 const int citizenCultivationAcres = 10;
 const float wheatForAcre = 0.5f;
+const int rounds = 10;
 
 float clamp(float n, float lower, float upper) {
     return std::max(lower, std::min(n, upper));
@@ -159,7 +160,7 @@ bool check_inputed_values(int newAcres, int soldAcres,int wheatToEat, int acresT
 void print_game(int roundNum, int died, int newCitizens, bool wasPlague, int citizens, int collectedWheat, int wheatFromAcre, int ratAte,int totalWheat, int acres, int acrePrice)
 {
     std::cout << "Мой повелитель, соизволь поведать тебе" << std::endl;
-    std::cout << "\tв году " << roundNum + 1 << " твоего высочайшего правления" << std::endl;
+    std::cout << "\tв году " << roundNum << " твоего высочайшего правления" << std::endl;
     std::cout << "\t " << died << " человек умерло с голоду, и " << newCitizens << " человек прибыли в наш великий город" << std::endl;
     if (wasPlague)
         std::cout << "\t Чума уничтожила половину населения" << std::endl;
@@ -287,7 +288,7 @@ int main()
         print_game_start(citizens, acres, wheat, acrePrice);
         ask_player(wheat, citizens, acres, acrePrice, acresToSeed, wheatToEat);
     }
-    for (int i = 1; i < 3; i++)
+    for (int i = startYear; i < rounds; i++)
     {
         if (!wasSaved)
         {
@@ -334,7 +335,7 @@ int main()
     }
 
     P = acres / citizens;
-    L = L/10;
+    L = L/rounds;
 
     show_game_results(L,P);
     clear_file();
