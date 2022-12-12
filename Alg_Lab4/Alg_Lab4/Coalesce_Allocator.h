@@ -1,6 +1,8 @@
 #pragma once
+#include <cassert> 
 
 #define CoalescePageSize 20480
+#define DEBUG (1)
 
 struct dataBlock
 {
@@ -25,7 +27,6 @@ public:
 		pagePtr= VirtualAlloc(nullptr, CoalescePageSize, MEM_COMMIT, PAGE_READWRITE);
 		this->head = (struct dataBlock*)(pagePtr);
 		
-		//assert(head != 0);
 		next = nullptr;
 		head->size= CoalescePageSize - sizeof(struct dataBlock);
 		
@@ -38,9 +39,13 @@ public:
 		
 		if (block == nullptr)
 		{
-			next = new MemoryPageCoalesce(CoalescePageSize);
-			return next->alloc(size);
+			MemoryPageCoalesce* iter = this;
+			while (iter->next != nullptr)
+				iter = iter->next;
+			iter->next = new MemoryPageCoalesce(CoalescePageSize);
+			return iter->next->alloc(size);
 		}
+
 		else
 		{
 			size_t oldSize = block->size;
@@ -49,14 +54,14 @@ public:
 			dataBlock* oldNext = block->next;
 			if (oldNext != ((dataBlock*)((char*)block + block->size)))
 			{
-				block->next = (dataBlock*)((char*)block + block->size);
-				((struct dataBlock*)((char*)block + block->size))->prev = block;
-				((struct dataBlock*)((char*)block + block->size))->next = oldNext;
-				((struct dataBlock*)((char*)block + block->size))->inUse = false;
-				((struct dataBlock*)((char*)block + block->size))->size = oldSize - size - sizeof(struct dataBlock);
+				block->next = (dataBlock*)((char*)block + block->size +sizeof(struct dataBlock));
+				((struct dataBlock*)((char*)block + block->size + sizeof(struct dataBlock)))->prev = block;
+				((struct dataBlock*)((char*)block + block->size + sizeof(struct dataBlock)))->next = oldNext;
+				((struct dataBlock*)((char*)block + block->size + sizeof(struct dataBlock)))->inUse = false;
+				((struct dataBlock*)((char*)block + block->size + sizeof(struct dataBlock)))->size = oldSize - size - sizeof(struct dataBlock);
 			}
-			//int a = sizeof(struct dataBlock);
-			//void* b = (void*)((char*)block + sizeof(struct dataBlock));
+
+
 			return (void*)((char*)block + sizeof(struct dataBlock));
 		}
 
@@ -67,6 +72,10 @@ public:
 
 		if ((char*)p - (char*)pagePtr < CoalescePageSize)
 		{
+#ifdef DEBUG
+			assert(isCorrectPtr(p)&&"Incorrect address!");
+#endif
+			
 			((struct dataBlock*)((char*)p - sizeof(struct dataBlock)))->inUse = false;
 			tryCoalesce(((struct dataBlock*)((char*)p - sizeof(struct dataBlock))));
 		}
@@ -76,11 +85,14 @@ public:
 		}
 		else
 		{
+#ifdef DEBUG
+			assert(isCorrectPtr(p) && "Incorrect address!");
+#endif
 			return false;
 		}
 		
 	}
-	//Добавить изменение размеров
+	
 	void tryCoalesce(dataBlock* structPtr)
 	{
 		while (structPtr->prev != nullptr && structPtr->prev->inUse == false)
@@ -105,23 +117,75 @@ public:
 				
 			}
 			structPtr->next = structPtr->next->next;
-			structPtr->size = size + sizeof(struct dataBlock);
+			structPtr->size += size + sizeof(struct dataBlock);
+			
 		}
 	}
 
 	dataBlock* findFirstFit(size_t size)
 	{
-		dataBlock* iterator = head;
-		while (iterator != nullptr)
+		dataBlock* iterator;
+		MemoryPageCoalesce* iteratorPage=this;
+		while (iteratorPage != nullptr)
 		{
-			if (iterator->inUse==false && iterator->size >= size+sizeof(struct dataBlock))
-				return iterator;
-			iterator = iterator->next;
+			iterator = iteratorPage->head;
+			while (iterator != nullptr)
+			{
+				if (iterator->inUse == false && iterator->size >= size + sizeof(struct dataBlock))
+					return iterator;
+				iterator = iterator->next;
+			}
+			iteratorPage = iteratorPage->next;
 		}
 		return nullptr;
 
 	}
 
+
+	bool isCorrectPtr(void* p)
+	{
+		dataBlock* iterHead = head;
+		while (iterHead != nullptr)
+		{
+			if ((void*)((char*)iterHead + sizeof(struct dataBlock)) == p)
+				return true;
+			iterHead = iterHead->next;
+		}
+		return false;
+	}
+#ifdef DEBUG
+	void assertLeaks()
+	{
+		dataBlock* iter = head;
+		while (iter != nullptr)
+		{
+			if (iter->inUse)
+				assert(!iter->inUse && "COALESCE MEMORY LEAK FOUND");
+			iter = iter->next;
+
+		}
+		if (next != nullptr)
+			next->assertLeaks();
+	}
+
+	void dumpBlocks(int pageNum) const
+	{
+		
+
+		dataBlock* iterHead = head;
+		while (iterHead != nullptr)
+		{
+			if (iterHead->inUse)
+			{
+				std::cout << "Page: " << pageNum << ", " << "address: " << (void*)((char*)iterHead + sizeof(struct dataBlock)) << std::endl;
+			}
+			iterHead = iterHead->next;
+		}
+		if (next != nullptr)
+			next->dumpBlocks(pageNum + 1);
+	}
+
+#endif
 };
 
 
@@ -130,40 +194,71 @@ class Coalesce
 public:
 	Coalesce()
 	{
-
+		isInitialized = false;
 	}
 
 	~Coalesce()
 	{
-		while (startPage != nullptr)
-		{
-			MemoryPageCoalesce* next = startPage->next;
-			VirtualFree(startPage, 0, MEM_RELEASE);
-			delete(next);
-			startPage = next;
-		}
+#ifdef DEBUG
+		assert(!isInitialized && "Coalesce should be deinitialized before destructor call!");
+#endif
 	}
 
 	void init()
 	{
+#ifdef DEBUG
+		assert(!isInitialized && "Coalesce is already initialized!");
+#endif
 		startPage = new MemoryPageCoalesce(CoalescePageSize);
+		isInitialized = true;
 	}
 
 	void* alloc(size_t size)
 	{
+#ifdef DEBUG
+		assert(isInitialized && "Coalesce should be initialized!");
+#endif
 		size = allign(size);
 		return startPage->alloc(size);
 	}
 
 	bool free(void* ptr)
 	{
+#ifdef DEBUG
+		assert(isInitialized && "Coalesce should be initialized!");
+#endif
 		return startPage->free(ptr);
 	}
 
+	void destroy()
+	{
+#ifdef DEBUG
+		assert(isInitialized && "Coalesce should be initialized!");
+		startPage->assertLeaks();
+#endif
+		while (startPage != nullptr)
+		{
+			MemoryPageCoalesce* next = startPage->next;
+			VirtualFree(startPage, 0, MEM_RELEASE);
+			delete(startPage);
+			startPage = next;
+		}
+
+		isInitialized = false;
+	}
+
+#ifdef DEBUG
+	void dumpBlocks() const
+	{
+		assert(isInitialized && "Coalesce should be initialized!");
+		std::cout << "Coalesce allocator:" << std::endl;
+		startPage->dumpBlocks(1);
+	}
+#endif
 
 private:
 	MemoryPageCoalesce* startPage;
-
+	bool isInitialized;
 	size_t allign(size_t size)
 	{
 		if (size % 8 == 0)

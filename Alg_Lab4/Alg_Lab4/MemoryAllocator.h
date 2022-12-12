@@ -1,6 +1,7 @@
 #pragma once
 #include "Coalesce_Allocator.h"
 #include "FSA_Allocator.h"
+#include "OSAllocator.h"
 
 #define _10MB 1048576
 
@@ -25,8 +26,8 @@ public:
 		fsa128.init(128);
 		fsa256.init(256);
 		fsa512.init(512);
-
 		coalesceAllocator.init();
+		osAllocator.init();
 	}
 
 	virtual void destroy()
@@ -51,9 +52,8 @@ public:
 		else if (size <= _10MB)
 			coalesceAllocator.alloc(size);
 		else
-		{
-			///Дописать нативный аллокатор
-		}
+			osAllocator.alloc(size);
+
 	}
 
 	virtual void free(void* p)
@@ -72,13 +72,25 @@ public:
 			return;
 		else if (coalesceAllocator.free(p))
 			return;
+		else if (osAllocator.free(p))
+			return;
 		else
 		{
-			// Дописать нативный аллокатор
+			//assert!
 		}
 	}
 
-	virtual void dumpStat() const;
+	virtual void dumpStat() const
+	{
+		fsa16.dumpBlocks();
+		fsa32.dumpBlocks();
+		fsa64.dumpBlocks();
+		fsa128.dumpBlocks();
+		fsa256.dumpBlocks();
+		fsa512.dumpBlocks();
+		coalesceAllocator.dumpBlocks();
+
+	}
 
 	virtual void dumpBlocks() const;
 
@@ -91,5 +103,7 @@ private:
 	FSA fsa512;
 
 	Coalesce coalesceAllocator;
+
+	OSAllocator osAllocator;
 
 };
