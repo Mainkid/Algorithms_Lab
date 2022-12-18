@@ -1,108 +1,57 @@
 #pragma once
 #include "windows.h"
+#include <cassert> 
 #include <iostream>
+#include "Constants.h"
 
-struct MemoryOS
-{
-	MemoryOS* next=nullptr;
-	void* ptr=nullptr;
-	int size;
-
-	MemoryOS() {}
-
-	void* alloc(int _size)
+namespace osallocator {
+	struct Header
 	{
-		if (!ptr)
-		{
-			ptr = VirtualAlloc(nullptr, _size, MEM_COMMIT, PAGE_READWRITE);
-			size = _size;
-			return ptr;
-		}
-		else if (next==nullptr)
-		{
-			next = new MemoryOS();
-			
-		}
-		return next->alloc(_size);
-	}
-	
-	
+		Header* next;
+		size_t size;
 
-};
+	};
+}
 
 
 class OSAllocator
 {
 public:
-	OSAllocator()
-	{
-		
-	}
+	OSAllocator();
 
-	void init()
-	{
-		head = new MemoryOS();
-	}
+	~OSAllocator();
 
-	~OSAllocator()
-	{
+	void init();
 
-	}
+	void* alloc(int _size);
 
-	void* alloc(int _size)
-	{
-		return head->alloc(_size);
-	}
+#ifdef DEBUG
+	void* alloc(int _size, osallocator::Header* page);
 
-	bool free(void* p)
-	{
-		MemoryOS* curPage = head;
-		MemoryOS* oldPage = head;
-		while (curPage != nullptr)
-		{
-			if (curPage->ptr == p)
-			{
-				VirtualFree(curPage->ptr, 0, MEM_RELEASE);
-				if (curPage == oldPage)
-					head = curPage->next;
-				else
-					oldPage->next = curPage->next;
-				delete curPage;
-				
-			}
-			oldPage = curPage;
-			curPage = curPage->next;
-		}
+	void dumpBlocks() const;
 
-		return true;
+	void dumpStat() const;
 
-	}
+	void assertLeaks();
 
-	void destroy()
-	{
-		MemoryOS* curPage = head;
-		while (curPage != nullptr)
-		{
-			MemoryOS* oldPage = curPage;
-			VirtualFree(curPage->ptr, 0, MEM_RELEASE);
-			curPage = curPage->next;
-			delete(oldPage);
-		}
-	}
+	void checkMemoryCorruption(osallocator::Header* page);
 
-	void dumpBlocks() const
-	{
-		std::cout << "OS Allocation: " << std::endl;
+#else
+	void* alloc(int _size, osallocator::Header* page);
+	
+#endif
 
-		MemoryOS* curPage = head;
-		while (curPage != nullptr)
-		{
-			std::cout << "Address: " << curPage->ptr << ", size: " << curPage->size << std::endl;
-			curPage=curPage->next;
-		}
-	}
+
+	osallocator::Header* createPage(size_t _size);
+
+	bool free(void* p);
+
+	void destroy();
+
 
 private:
-	MemoryOS* head;
-	
+	osallocator::Header* startPage;
+
+
+	size_t allign(size_t size);
 };

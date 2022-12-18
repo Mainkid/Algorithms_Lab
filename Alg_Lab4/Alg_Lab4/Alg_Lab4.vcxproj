@@ -140,11 +140,16 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Alg_Lab4.cpp" />
+    <ClCompile Include="Coalesce_Allocator.cpp" />
+    <ClCompile Include="FSA_Allocator.cpp" />
+    <ClCompile Include="Memory_Allocator.cpp" />
+    <ClCompile Include="OSAllocator.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Coalesce_Allocator.h" />
+    <ClInclude Include="Constants.h" />
     <ClInclude Include="FSA_Allocator.h" />
-    <ClInclude Include="MemoryAllocator.h" />
+    <ClInclude Include="Memory_Allocator.h" />
     <ClInclude Include="OSAllocator.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
