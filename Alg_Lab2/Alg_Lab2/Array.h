@@ -1,6 +1,6 @@
 #pragma once
 
-constexpr int defaultCapacity = 4;
+constexpr int DEFAULT_CAPACITY = 4;
 
 template <typename T>
 class Array final
@@ -15,15 +15,14 @@ public:
 
 		Iterator()
 		{
-			iteratorPos = 0;
+			
 		}
 
-		Iterator(int* curSize, T* arr)
+		Iterator(T* ptr,Array* arr,int dir)
 		{
-			iteratorPos = 0;
-			this->size = curSize;
+			this->ptr = ptr;
+			this->dir = dir;
 			this->arr = arr;
-			
 		}
 
 		~Iterator()
@@ -33,158 +32,222 @@ public:
 
 		const T& get() const
 		{
-			return *(arr+iteratorPos);
+			return *ptr;
 		}
 
 		void set(const T& value)
 		{
-			*(arr+iteratorPos) = value;
+			ptr->~T();
+			new (ptr) T(value);
 		}
 		void next()
 		{
-			iteratorPos += 1;
+			ptr += dir;
 		}
-		bool hasNext()
+		bool isLast() const
 		{
-			if (iteratorPos < *size)
-			{
-				return true;
-			}
-			else
-				return false;
+			return (ptr + dir >= arr->arrayPtr && ptr + dir <= arr->arrayPtr + arr->size() - 1);
 		}
 	private:
-		int iteratorPos;
-		int* size;
-		T* arr;
+		int dir;
+		T* ptr;
+		Array* arr;
 
+	};
+
+	template <typename T>
+	class ConstIterator
+	{
+		ConstIterator()
+		{
+
+		}
+
+		ConstIterator(T* ptr, Array* arr, int dir)
+		{
+			this->ptr = ptr;
+			this->dir = dir;
+			this->arr = arr;
+		}
+
+		~ConstIterator()
+		{
+
+		}
+
+		const T& get() const
+		{
+			return *ptr;
+		}
+		void next()
+		{
+			ptr += dir;
+		}
+		bool isLast() const
+		{
+			return (ptr + dir >= arr->arrayPtr && ptr + dir <= arr->arrayPtr + arr->size() - 1);
+		}
+	private:
+		int dir;
+		T* ptr;
+		Array* arr;
 	};
 
 	Iterator<T> iterator()
 	{
-		Iterator<T> it(currentSize, (*arrayPtr));
+		Iterator<T> it(arrayPtr, this, 1);
 		return it;
 	}
 
+	Iterator<T> reverseIterator()
+	{
+		Iterator<T> it(arrayPtr+currentSize-1, this, -1);
+		return it;
+	}
+
+	ConstIterator<T> iterator() const
+	{
+		ConstIterator<T> it(arrayPtr, this, 1);
+		return it;
+	}
+
+	ConstIterator<T> reverseIterator() const
+	{
+		ConstIterator<T> it(arrayPtr + currentSize - 1, this, -1);
+		return it;
+	}
 
 	Array()
 	{
 		
-		arrayPtr = (T**)malloc(sizeof(T*));
-		(*arrayPtr) = (T*)malloc(sizeof(T) * defaultCapacity);
-		maxSize = (int*)malloc(sizeof(int));
-		currentSize = (int*)malloc(sizeof(int));
-		referenceAmount = (int*)malloc(sizeof(int));
-		*maxSize = defaultCapacity;
-		*currentSize = 0;
-		*referenceAmount = 1;
-
-
+		arrayPtr = (T*)malloc(sizeof(T) * DEFAULT_CAPACITY);
+		maxSize = DEFAULT_CAPACITY;
+		currentSize = 0;
 	}
 
 	Array(int capacity)
 	{
+		arrayPtr = (T*)malloc(sizeof(T) * capacity);
+		maxSize = capacity;
+		currentSize = 0;
+	}
 
-		arrayPtr = (T**)malloc(sizeof(T*));
-		(*arrayPtr) = (T*)malloc(sizeof(T) * defaultCapacity);
-		maxSize = (int*)malloc(sizeof(int));
-		currentSize = (int*)malloc(sizeof(int));
-		referenceAmount= (int*)malloc(sizeof(int));
-		*maxSize = capacity;
-		*currentSize = 0;
-		*referenceAmount = 1;
+	Array(Array&& other)
+	{
 
-		
+		arrayPtr = other.arrayPtr;
+		size = other.size;
+		maxSize = other.maxSize;
+
+		other.arrayPtr = nullptr;
+		other.size = 0;
+		other.capacity = 0;
+
 	}
 
 	~Array()
 	{
-		if (*referenceAmount > 1)
-		{
-			*referenceAmount -= 1;
-		}
-		else
-		{
-			free(*arrayPtr);
-			free(maxSize);
-			free(currentSize);
-			free(referenceAmount);
-		}
-
-
+		clear();
 	}
 
 	Array& operator=(const Array& other)
 	{
-		if (this != &other)
-		{
-			this->clear();
-			this->arrayPtr = (other.arrayPtr);
-			this->referenceAmount = (other.referenceAmount);
-			this->maxSize = (other.maxSize);
-			this->currentSize = (other.currentSize);
-			*(this->referenceAmount) += 1;
-		}
-
+		Array temp(other);
+		swap(temp);	
 		return *this;
 	}
 
+	 Array& operator=(Array&& other) noexcept
+	{
+		if (this != &other)
+		{
+			
+			for (int i = 0; i < currentSize; i++) {
+				arrayPtr[i].~T();
+			}
+			free(arrayPtr);
+
+			currentSize = other.currentSize;
+			arrayPtr = other.arrayPtr;
+			maxSize = other.maxSize;
+
+			other.maxSize = 0;
+			other.arrayPtr = nullptr;
+			other.currentSize = 0;
+
+		}
+		return *this;
+	}
+
+	Array(const Array& other)
+	{
+
+		arrayPtr =(T*) malloc(other.size() * sizeof(T));
+		for (int i = 0; i < other.size(); i++)
+		{
+			new (arrayPtr + i)T(other.arrayPtr[i]);
+		}
+		currentSize = other.size();
+		maxSize = other.maxSize;
+
+	}
 
 	int insert(const T& value)
 	{
-		*currentSize += 1;
-
-		if (*currentSize > *maxSize)
-			expandArray();
-		(*arrayPtr)[*currentSize - 1] = value;
-		return 0;
+		return insert(currentSize, value);
 	}
-	//Добавить move-семантику!!!
-
+	//Мб улучшить производительность??
 	int insert(int index, const T& value)
 	{
-		if (index > *currentSize)
+		if (index > currentSize)
 		{
-			insert(value);
-			return 0;
+			return -1;
 		}
 
-		*currentSize += 1;
-		if (( *currentSize) > *maxSize)
+		
+		if (currentSize == maxSize)
+		{
 			expandArray();
+		}
 
-		for (int i = *currentSize; i > index; i--)
-			(*arrayPtr)[i] =(*arrayPtr)[i - 1];
+		new (arrayPtr + currentSize) T(std::move(arrayPtr[currentSize-1]));
 
-		(*arrayPtr)[index] = value;
+		for (int i = currentSize-1; i > index; i--)
+			arrayPtr[i]=(std::move(arrayPtr[i - 1]));
 
-		return 0;
+		arrayPtr[index] = value;
+		
+		currentSize += 1;
+		return index;
 	}
 
 	void  remove(int index)
 	{
-		if (index >= *currentSize)
+		if (index >= currentSize || index<0)
 			return;
 
-		*currentSize -= 1;
-		for (int i = 0; i < *currentSize; i++)
-			(*arrayPtr)[i] = (*arrayPtr)[i + 1];
+		currentSize -= 1;
+
+		for (int i = index; i < currentSize; i++)
+			arrayPtr[i]=T(std::move(arrayPtr[i + 1]));
+
+		(&arrayPtr[currentSize])->~T();
 	}
 
 
 	const T& operator[] (int index) const
 	{
-		return (*arrayPtr)[index];
+		return arrayPtr[index];
 	}
 
 	T& operator [](int index)
 	{
-		return (*arrayPtr)[index];
+		return arrayPtr[index];
 	}
 
 	int size() const
 	{
-		return *currentSize;
+		return currentSize;
 	}
 
 	
@@ -196,27 +259,47 @@ public:
 private:
 
 	
-
+	//!!!
 	void expandArray()
 	{
-		T* tmp = (T*)malloc(sizeof(T) * (*maxSize) * 2);
-		for (int i = 0; i < *maxSize; i++)
-			tmp[i] = (*arrayPtr)[i];
+		T* tmp = (T*)malloc(sizeof(T) * (maxSize) * 2);
+		for (int i = 0; i < maxSize; i++)
+			new (tmp+ i)T(std::move(arrayPtr[i]));
 
+		clear();
 
-
-		*arrayPtr = tmp;
-		*maxSize *= 2;
+		arrayPtr = tmp;
+		maxSize *= 2;
 	}
 
 	void clear()
 	{
-		free(*arrayPtr);
+		for (int i = 0; i < currentSize; i++) {
+			(arrayPtr[i]).~T();
+		}
+		free(arrayPtr);
+	}
+
+	void swap(Array& other)
+	{
+		int tmp;
+		T* tmpT;
+
+		tmp = this->maxSize;
+		this->maxSize = other.maxSize;
+		other.maxSize = tmp;
+
+		tmp = this->currentSize;
+		this->currentSize = other.currentSize;
+		other.currentSize = tmp;
+
+		tmpT = this->arrayPtr;
+		this->arrayPtr = other.arrayPtr;
+		other.arrayPtr = tmpT;
 	}
 
 	
-	int* maxSize;
-	int* currentSize;
-	int* referenceAmount;
-	T** arrayPtr;
+	int maxSize;
+	int currentSize;
+	T* arrayPtr;
 };
